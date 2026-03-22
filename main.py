@@ -163,7 +163,7 @@ async def mfa_verify(code: str, current_user: dict = Depends(get_current_user)):
 
     return {"message": "MFA enabled successfully"}
 
-@app.delete("/user")
+@app.delete("/delete")
 async def delete_user(current_user: dict = Depends(get_current_user)):
     async with AsyncSessionLocal() as db_session:
         result = await db_session.execute(select(User).where(User.id == current_user["id"]))
@@ -187,3 +187,16 @@ async def admin_users(current_user: dict = Depends(require_admin)):
         all_users = await db_session.execute(select(User).where(User.id == current_user["id"]))
         users = all_users.scalars().all()
         return [{"id": str(u.id), "email": u.email, "name": u.name, "is_admin": u.is_admin} for u in users]
+
+@app.delete("/admin/delete-user/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(require_admin)):
+    async with AsyncSessionLocal() as db_session:
+        result = await db_session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=400, detail="User does not exist")
+
+        await db_session.delete(user)
+        await db_session.commit()
+
+    return {"message": "User deleted successfully"}
