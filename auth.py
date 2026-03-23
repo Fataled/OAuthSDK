@@ -1,3 +1,5 @@
+import secrets
+
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
@@ -15,7 +17,8 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+RESET_CODE_EXPIRE_MINUTES = 30
 
 # Create a copy of the data to not mess with the original
 # Set an expiry time
@@ -78,3 +81,8 @@ async def require_admin(current_user: dict = Depends(get_current_user)):
         if not user or not user.is_admin:
             raise HTTPException(status_code=400, detail="Admin required")
         return current_user
+
+def create_password_reset_code():
+    code = str(secrets.randbelow(900000) + 100000)
+    exp = datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_EXPIRE_MINUTES)
+    return code, exp

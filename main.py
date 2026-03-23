@@ -1,4 +1,6 @@
 import io
+from datetime import datetime, timezone
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 import pyotp
 import qrcode
 from fastapi import FastAPI, Depends, HTTPException
@@ -11,7 +13,7 @@ from sqlalchemy import select
 from starlette.responses import StreamingResponse
 from database import AsyncSessionLocal
 from models import User
-from auth import create_access_token, get_current_user, hash_password, verify_password, blacklist_token, require_admin
+from auth import create_access_token, get_current_user, hash_password, verify_password, blacklist_token, require_admin, create_password_reset_code
 from pydantic import BaseModel
 
 
@@ -28,6 +30,18 @@ oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
+
+conf = ConnectionConfig(
+    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
+    MAIL_FROM=os.getenv("MAIL_FROM"),
+    MAIL_PORT=587,
+    MAIL_SERVER="smtp.gmail.com",
+    MAIL_STARTTLS=True,
+    MAIL_SSL_TLS=False,
+)
+
+fm = FastMail(conf)
 
 @app.get("/login/google")
 async def google_login(request: Request):
@@ -200,3 +214,63 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_admin))
         await db_session.commit()
 
     return {"message": "User deleted successfully"}
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetModel(BaseModel):
+    email: str
+    code: str
+    password: str
+
+@app.post("/auth/reset-request")
+async def reset_request_user(body: PasswordResetRequest):
+    async with AsyncSessionLocal() as db_session:
+        result = await db_session.execute(select(User).where(User.email == body.email))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=400, detail="User does not exist")
+
+        code, exp = create_password_reset_code()
+        user.reset_password_token = code
+        user.reset_password_expiry = exp
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        message = MessageSchema(
+            subject="Password Reset Request",
+            recipients=[body.email],
+            body=f"""
+            <h2>Password Reset Request</h2>
+            <p>You requested a password reset. Use the code below to reset your password.</p>
+            <h1 style="letter-spacing: 4px;">{code}</h1>
+            <p>This code expires in 15 minutes. If you didn't request this, ignore this email.</p>
+            """,
+            subtype="html"
+        )
+
+        await fm.send_message(message)
+
+    return {"message": "Password reset request sent successfully"}
+
+
+
+@app.post("/auth/password-reset")
+async def change_password(reset_data: PasswordResetModel):
+    async with AsyncSessionLocal() as db_session:
+        result = await db_session.execute(select(User).where(User.email == reset_data.email))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=400, detail="User does not exist")
+        if not user.reset_password_expiry or datetime.now(timezone.utc) > user.reset_password_expiry.replace(tzinfo=timezone.utc):
+            raise HTTPException(status_code=400, detail="Password reset request expired")
+        if user.reset_password_token != reset_data.code:
+            raise HTTPException(status_code=400, detail="Invalid reset code")
+
+        user.hashed_password = hash_password(reset_data.password)
+        user.reset_password_token = None
+        user.reset_password_expiry = None
+        await db_session.commit()
+        await db_session.refresh(user)
+
+    return {"message": "Password was successfully changed"}

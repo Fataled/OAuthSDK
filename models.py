@@ -16,4 +16,6 @@ class User(Base):
     hashed_password = Column(String, nullable=True)
     totp_secret = Column(String, nullable=True)
     mfa_enabled = Column(Boolean, nullable=True)
+    reset_password_token = Column(String, nullable=True)
+    reset_password_expiry = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=datetime.now)
