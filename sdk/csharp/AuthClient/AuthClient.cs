@@ -184,5 +184,18 @@ public class AuthClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+
+    public async Task<JsonElement> DisableMfa(string token, string code)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, "/mfa/disable");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(new
+        {
+            code
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
     
 }

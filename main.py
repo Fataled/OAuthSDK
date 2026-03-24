@@ -373,4 +373,4 @@ async def mfa_disable(code: totpCode ,current_user: dict = Depends(require_admin
         user.mfa_enabled = False
         await db_session.commit()
 
-    return {"message": "MFA enabled successfully"}
+    return {"message": "MFA enabled disabled"}
