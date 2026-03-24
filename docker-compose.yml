@@ -1,0 +1,51 @@
+services:
+  auth:
+    build: .
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://DB_USER:DB_PASSWORD@postgres:5432/DB_NAME
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: YOUR_SECRET_KEY
+      GOOGLE_CLIENT_ID: YOUR_GOOGLE_CLIENT_ID
+      GOOGLE_CLIENT_SECRET: YOUR_GOOGLE_CLIENT_SECRET
+      MAIL_USERNAME: YOUR_EMAIL
+      MAIL_PASSWORD: YOUR_EMAIL_PASSWORD
+      MAIL_FROM: YOUR_EMAIL
+      MAIL_SERVER: YOUR_SMTP_SERVER
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: DB_USER
+      POSTGRES_PASSWORD: DB_PASSWORD
+      POSTGRES_DB: DB_NAME
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U DB_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:
