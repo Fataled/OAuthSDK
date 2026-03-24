@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <PackageId>OAuth2Project</PackageId>
+        <PackageId>AuthClient</PackageId>
         <Authors>Brume Ako</Authors>
-        <Version>1.0.0</Version>
+        <Version>1.1.0</Version>
         <Description>OAuth2 SDK</Description>
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>

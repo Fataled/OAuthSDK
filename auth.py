@@ -67,7 +67,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 async def blacklist_token(token: str, exp:int) -> None:
-    ttl = exp - int(datetime.now(timezone.utc).timestamp())
+    ttl = exp - int(datetime.now(timezone.utc).timestamp()) #Time token lasts
     if ttl > 0:
         await redis_client.setex(f"blacklist:{token}", ttl, "true")
 

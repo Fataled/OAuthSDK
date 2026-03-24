@@ -1,216 +1,392 @@
-# Auth Platform
+# AuthClient
 
-A authentication backend built with FastAPI. Supports Google OAuth2, email/password login, MFA with TOTP, JWT-based auth, and token blacklisting via Redis. Includes client SDKs for Python and C#.
+A lightweight authentication client library for working with a FastAPI-based auth API.
+
+This project includes SDK support for:
+
+* C# / .NET
+* Python
+
+Both clients provide clean wrappers around common authentication workflows such as:
+
+* user registration
+* login
+* logout
+* get current user
+* delete current user
+* admin user management
+* OpenID Connect (OIDC)
+* multi-factor authentication (MFA)
+* password reset
+* mail service configuration
+
+Built by Brume Ako.
 
 ---
 
 ## Features
 
-- Google OAuth2 login
-- Email/password registration and login
-- MFA with TOTP (Google Authenticator / Authy)
-- JWT issuance and verification
-- Token blacklisting via Redis (logout)
-- Admin-only endpoints
-- Client SDKs for Python and C#
+* Simple, clean API
+* Async-first design
+* Token-based authentication
+* C# and Python client support
+* OIDC provider support
+* MFA setup and verification
+* Password reset flows
+* Admin endpoints
+* Easy integration with backend services and apps
 
 ---
 
-## Tech Stack
+## Installation
 
-- **Python FastAPI** — API server
-- **PostgreSQL** — user storage
-- **SQLAlchemy + asyncpg** — async ORM
-- **Alembic** — database migrations
-- **Redis** — token blacklisting
-- **python-jose** — JWT encoding/decoding
-- **passlib + bcrypt** — password hashing
-- **pyotp** — TOTP generation and verification
-- **Authlib** — Google OAuth2
-
----
-
-## Prerequisites
-
-- Python 3.11+
-- PostgreSQL running locally on port 5432
-- Redis running locally on port 6379 (or via Docker)
-- A Google OAuth2 app with a client ID and secret
-
----
-
-## Setup
-
-### 1. Clone and install dependencies
+### C# / .NET
 
 ```bash
-git clone <your-repo>
-cd OAuthLibrary
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-pip install -r requirements.txt
+dotnet add package AuthClient
 ```
 
-### 2. Configure environment variables
-
-Create a `.env` file in the project root:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:yourpassword@localhost:5432/mydb
-SECRET_KEY=your_secret_key_here
-REDIS_HOST=localhost
-REDIS_PORT=6379
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-```
-
-Generate a secure secret key with:
+### Python
 
 ```bash
-python -c "import secrets; print(secrets.token_hex(32))"
+pip install httpx
 ```
-
-### 3. Set up the database
-
-```bash
-alembic upgrade head
-```
-
-### 4. Start Redis (if using Docker)
-
-```bash
-docker run -d --name redis -p 6379:6379 redis
-```
-
-### 5. Run the server
-
-```bash
-uvicorn main:app --reload
-```
-
-The API will be available at `http://127.0.0.1:8000`. Interactive docs at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## API Endpoints
+## Requirements
 
-### Auth
+* .NET 6.0 or later for the C# SDK
+* Python 3.9+ recommended for the Python client
+* A backend API with endpoints such as:
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/auth/google` | Google OAuth2 login | No |
-| POST | `/register` | Register with email and password | No |
-| POST | `/login` | Login with email, password, and optional TOTP code | No |
-| POST | `/logout` | Blacklist the current JWT | Yes |
-
-### User
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/user` | Get current user from JWT | Yes |
-| DELETE | `/user` | Delete current user | Yes |
-
-### MFA
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/mfa/setup` | Generate a TOTP secret and return a QR code | Yes |
-| POST | `/mfa/verify` | Verify a TOTP code and enable MFA | Yes |
-
-### Admin
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/admin/users` | List all users | Yes (admin only) |
+  * POST /register
+  * POST /login
+  * POST /logout
+  * GET /me
+  * DELETE /delete
+  * GET /admin/users
+  * DELETE /admin/delete-user/{user_id}
+  * POST /oidc/register
+  * DELETE /oidc/remove
+  * GET /oidc/login-url/{provider}
+  * POST /mfa/setup
+  * POST /mfa/verify
+  * DELETE /mfa/disable
+  * POST /auth/reset-request
+  * POST /auth/password-reset
+  * POST /modify-mail
+  * DELETE /remove-mail
 
 ---
 
-## Authentication
+## C# SDK
 
-All protected endpoints require a Bearer token in the `Authorization` header:
+### Create the client
 
+```csharp
+using AuthClient;
+
+var client = new AuthClient.AuthClient("https://your-api-url.com");
 ```
-Authorization: Bearer <your_jwt>
+
+### Register
+
+```csharp
+var result = await client.RegisterAsync(
+    "user@example.com",
+    "StrongPassword123",
+    "John Doe"
+);
 ```
 
-To get a token, register or login and copy the `access_token` from the response.
+### Login
+
+```csharp
+var result = await client.LoginAsync(
+    "user@example.com",
+    "StrongPassword123"
+);
+```
+
+### Login with MFA
+
+```csharp
+var result = await client.LoginAsync(
+    "user@example.com",
+    "StrongPassword123",
+    "123456"
+);
+```
+
+### Logout
+
+```csharp
+await client.LogoutAsync("your-jwt-token");
+```
+
+### Get current user
+
+```csharp
+var user = await client.GetUserAsync("your-jwt-token");
+```
+
+### Delete current user
+
+```csharp
+await client.DeleteUserAsync("your-jwt-token");
+```
+
+### Get all users (admin)
+
+```csharp
+var users = await client.GetAllUsersAsync("admin-token");
+```
+
+### Delete user (admin)
+
+```csharp
+await client.AdminDeleteUserAsync("admin-token", "user-id");
+```
+
+### Register OIDC provider (admin)
+
+```csharp
+await client.RegisterOidcProviderAsync(
+    "admin-token",
+    "google",
+    "client-id",
+    "client-secret",
+    "https://accounts.google.com/.well-known/openid-configuration"
+);
+```
+
+### Remove OIDC provider (admin)
+
+```csharp
+await client.RemoveOidcProvider("admin-token", "google");
+```
+
+### Get OIDC login URL
+
+```csharp
+var url = await client.LoginWithOidc("google");
+```
+
+Open the returned URL in a browser to authenticate.
+
+### Setup MFA
+
+```csharp
+byte[] qrCode = await client.SetupMfa("your-jwt-token");
+File.WriteAllBytes("qrcode.png", qrCode);
+```
+
+### Verify MFA
+
+```csharp
+await client.VerifyMfa("your-jwt-token", "123456");
+```
+
+### Disable MFA
+
+```csharp
+await client.DisableMfa("your-jwt-token", "123456");
+```
+
+### Request password reset
+
+```csharp
+await client.RequestPasswordReset("user@example.com");
+```
+
+### Reset password
+
+```csharp
+await client.ResetPassword(
+    "user@example.com",
+    "NewPassword123",
+    "reset-code"
+);
+```
+
+### Configure mail service (admin)
+
+```csharp
+await client.ModifyMailService(
+    "admin-token",
+    "email@gmail.com",
+    "password",
+    "email@gmail.com",
+    587,
+    "smtp.gmail.com",
+    true,
+    false
+);
+```
+
+### Remove mail service (admin)
+
+```csharp
+await client.DeleteMailServiceAsync("admin-token");
+```
 
 ---
 
-## MFA Setup
+## Python Client
 
-1. Call `POST /mfa/setup` with your JWT — save the QR code image returned
-2. Scan the QR code with Google Authenticator or Authy
-3. Call `POST /mfa/verify?code=123456` with the 6-digit code from your app
-4. MFA is now enabled — future logins require a `totp_code` field
+### Setup
 
----
+```python
+from auth_client import AuthClient
 
-## Client SDKs
-
-### Python SDK
-
-```bash
-pip install sdk/python
+client = AuthClient("https://your-api-url.com")
 ```
+
+### Register
+
+```python
+await client.register(
+    "user@example.com",
+    "StrongPassword123",
+    "John Doe"
+)
+```
+
+### Login
+
+```python
+await client.login(
+    "user@example.com",
+    "StrongPassword123"
+)
+```
+
+### Login with MFA
+
+```python
+await client.login(
+    "user@example.com",
+    "StrongPassword123",
+    "123456"
+)
+```
+
+### Get current user
+
+```python
+await client.get_user(token)
+```
+
+### Logout
+
+```python
+await client.logout(token)
+```
+
+### Delete user
+
+```python
+await client.delete_user(token)
+```
+
+### Admin: Get all users
+
+```python
+await client.get_all_users(admin_token)
+```
+
+### Admin: Delete user
+
+```python
+await client.admin_delete_user(admin_token, "user-id")
+```
+
+### Example usage
 
 ```python
 import asyncio
 from auth_client import AuthClient
 
-client = AuthClient("http://127.0.0.1:8000")
-
 async def main():
-    result = await client.register("user@example.com", "password123", "My Name")
-    token = result["access_token"]
+    client = AuthClient("https://your-api-url.com")
 
-    user = await client.get_user(token)
-    print(user)
+    user = await client.register(
+        "user@example.com",
+        "StrongPassword123",
+        "John Doe"
+    )
 
-    await client.logout(token)
+    login = await client.login(
+        "user@example.com",
+        "StrongPassword123"
+    )
+
+    print(login)
 
 asyncio.run(main())
 ```
 
-### C# SDK
+👉 Full Python implementation available in `/python/auth_client.py`
 
-Add a reference to `sdk/csharp/AuthClient/AuthClient.csproj` in your project.
+---
+
+## Error Handling
+
+Both clients rely on HTTP status validation.
+
+### C#
 
 ```csharp
-var client = new AuthClient.AuthClient("http://127.0.0.1:8000");
-
-var result = await client.RegisterAsync("user@example.com", "password123", "My Name");
-var token = result.GetProperty("access_token").GetString()!;
-
-var user = await client.GetUserAsync(token);
-Console.WriteLine(user);
-
-await client.LogoutAsync(token);
+try
+{
+    await client.LoginAsync("user@example.com", "password");
+}
+catch (HttpRequestException ex)
+{
+    Console.WriteLine(ex.Message);
+}
 ```
+
+### Python
+
+```python
+try:
+    result = await client.login("user@example.com", "password")
+except httpx.HTTPStatusError as ex:
+    print(str(ex))
+```
+
+---
+
+## Notes
+
+* C# methods return `JsonElement` unless otherwise noted
+* The Python client returns parsed JSON as `dict`
+* Tokens must be passed manually to protected endpoints
+* OIDC providers are registered at runtime unless backend persistence is added
+* MFA setup returns a QR code image as PNG bytes in the C# SDK
+* Admin endpoints require a valid admin token
 
 ---
 
 ## Project Structure
 
-```
-OAuthLibrary/
-  main.py           # FastAPI app and route definitions
-  auth.py           # JWT, password hashing, MFA, dependencies
-  database.py       # SQLAlchemy async engine and session
-  models.py         # User model
-  redis_client.py   # Redis connection
-  alembic/          # Database migrations
-  sdk/
-    python/         # Python client SDK
-    csharp/         # C# client SDK
+```text
+AuthClient/
+├── AuthClient/   # C# SDK published to NuGet
+├── TestApp/      # Example C# app
+└── python/       # Optional Python client implementation
 ```
 
 ---
 
-## Making a User an Admin
+## License
 
-Connect to your database and run:
+MIT License
 
-```sql
-UPDATE public.users SET is_admin = true WHERE email = 'youremail@example.com';
-```
+---
+
+## Author
+
+Brume Ako

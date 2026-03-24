@@ -115,6 +115,33 @@ public class AuthClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+    
+    public async Task<JsonElement> RegisterOidcProviderAsync(
+        string token,
+        string name,
+        string clientId,
+        string clientSecret,
+        string metadataUrl,
+        string scope = "openid email profile")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/oidc/register");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        request.Content = JsonContent.Create(new
+        {
+            name = name,
+            client_id = clientId,
+            client_secret = clientSecret,
+            metadata_url = metadataUrl,
+            scope = scope
+        });
+
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return result;
+    }
 
     public async Task<JsonElement> RemoveOidcProvider(string token, string oidcProviderId)
     {
