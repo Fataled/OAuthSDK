@@ -158,5 +158,31 @@ public class AuthClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+
+    public async Task<JsonElement> RequestPasswordReset(string email)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/reset-request");
+        request.Content = JsonContent.Create(new
+        {
+            email
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public async Task<JsonElement> ResetPassword(string email, string password, string code)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/auth/password-reset");
+        request.Content = JsonContent.Create(new
+        {
+            email,
+            code,
+            password
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
     
 }

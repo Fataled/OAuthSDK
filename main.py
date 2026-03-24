@@ -181,7 +181,7 @@ async def mfa_verify(code: totpCode, current_user: dict = Depends(get_current_us
         totp = pyotp.TOTP(user.totp_secret)
         print(f"Expected code: {totp.now()}")
         print(f"Received code: {code}")
-        if not totp.verify(code, valid_window=2):
+        if not totp.verify(code.code, valid_window=2):
             raise HTTPException(status_code=401, detail="Invalid MFA code")
 
         user.mfa_enabled = True
@@ -355,3 +355,22 @@ class oidcProvider:
 async def remove_oidc_login(provider: oidcProvider, current_user: dict = Depends(require_admin)):
     oauth.destroy_client(provider)
     return {"message": f"OIDC login removed successfully"}
+
+@app.delete("/mfa/disable")
+async def mfa_disable(code: totpCode ,current_user: dict = Depends(require_admin)):
+    async with AsyncSessionLocal() as db_session:
+        result = await db_session.execute(select(User).where(User.id == current_user["id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=400, detail="User does not exist")
+
+        totp = pyotp.TOTP(user.totp_secret)
+        print(f"Expected code: {totp.now()}")
+        print(f"Received code: {code}")
+        if not totp.verify(code.code, valid_window=2):
+            raise HTTPException(status_code=401, detail="Invalid MFA code")
+
+        user.mfa_enabled = False
+        await db_session.commit()
+
+    return {"message": "MFA enabled successfully"}
