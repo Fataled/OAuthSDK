@@ -69,7 +69,7 @@ public class AuthClient
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> GetAllUsersAsync(string token, JsonElement user)
+    public async Task<JsonElement> GetAllUsersAsync(string token)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, "/admin/users");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -78,12 +78,85 @@ public class AuthClient
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> AdminDeleteUserAsync(string token, string user_id)
+    public async Task<JsonElement> AdminDeleteUserAsync(string token, string userId)
     {
-        var request = new HttpRequestMessage(HttpMethod.Delete, $"/admin/delete-user/{user_id}");
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/admin/delete-user/{userId}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+
+    public async Task<JsonElement> ModifyMailService(string token, string mailUsername, string mailPassword,
+        string mailFrom, int mailPort, string mailServer, bool mailStartttls, bool mailSslTls)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/modify-mail");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(new
+        {
+            mail_username = mailUsername,
+            mail_password = mailPassword,
+            mail_from = mailFrom,
+            mail_port = mailPort,
+            mail_server = mailServer,
+            mail_startttls = mailStartttls,
+            mail_ssl_tls = mailSslTls,
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public async Task<JsonElement> DeleteMailServiceAsync(string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, $"/remove-mail");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public async Task<JsonElement> RemoveOidcProvider(string token, string oidcProviderId)
+    {
+        var request =  new HttpRequestMessage(HttpMethod.Delete, $"/oidc/remove");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(new
+        {
+            oidc_provider = oidcProviderId,
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public async Task<JsonElement> LoginWithOidc(string provider)
+    {
+        var response = await _httpClient.GetAsync($"/oidc/login-url/{provider}");
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    public async Task<byte[]> SetupMfa(string token)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/mfa/setup");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    public async Task<JsonElement> VerifyMfa(string token, string mfaCode)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "mfa/verify");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(new
+        {
+            code = mfaCode
+        });
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+    
 }

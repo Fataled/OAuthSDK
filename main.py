@@ -6,7 +6,6 @@ import qrcode
 from fastapi import FastAPI, Depends, HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 import os
 from sqlalchemy import select
@@ -15,21 +14,24 @@ from database import AsyncSessionLocal
 from models import User
 from auth import create_access_token, get_current_user, hash_password, verify_password, blacklist_token, require_admin, create_password_reset_code
 from pydantic import BaseModel
-
+from oauth_client import oauth, create_openid_connect_client_registration
 
 load_dotenv()
 app = FastAPI()
-oauth = OAuth()
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET"))
 
-oauth.register(
-    'google',
-    client_id=os.getenv("GOOGLE_CLIENT_ID"),
-    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
+
+client_id=os.getenv("GOOGLE_CLIENT_ID")
+client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
+client_kwargs={'scope': 'openid email profile'}
+
+create_openid_connect_client_registration('google',
+    client_id=client_id,
+    client_secret=client_secret,
+    server_metadata_url=server_metadata_url,
+    client_kwargs=client_kwargs)
 
 conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
@@ -43,31 +45,36 @@ conf = ConnectionConfig(
 
 fm = FastMail(conf)
 
-@app.get("/login/google")
-async def google_login(request: Request):
-    google = oauth.create_client('google')
-    redirect_uri = request.url_for("auth_via_google")
+@app.get("/login/{provider}")
+async def oidc_login(provider: str, request: Request):
+    client = oauth.create_client(provider)
+    if client is None:
+        raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
+    redirect_uri = request.url_for("auth_via_oidc", provider=provider)
     print(f"Redirect URI: {redirect_uri}")
-    return await google.authorize_redirect(request, redirect_uri)
+    return await client.authorize_redirect(request, redirect_uri)
 
-@app.get("/auth/google")
-async def auth_via_google(request: Request):
-    google = oauth.create_client('google')
-    token = await google.authorize_access_token(request)
-    user_info = token['userinfo']
+@app.get("/auth/{provider}", name="auth_via_oidc")
+async def auth_via_oidc(provider: str, request: Request):
+    client = oauth.create_client(provider)
+
+    if client is None:
+        raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
+
+    token = await client.authorize_access_token(request)
+    user_info = token["userinfo"]
 
     async with AsyncSessionLocal() as db_session:
-        # Check if user alr exists
         result = await db_session.execute(
-            select(User).where(User.email == user_info['email'])
+            select(User).where(User.email == user_info["email"])
         )
-        user = result.scalar_one_or_none() # This either returns the user OR none
+        user = result.scalar_one_or_none()
 
         if user is None:
             user = User(
-                email=user_info['email'],
-                name=user_info['name'],
-                picture=user_info['picture'],
+                email=user_info["email"],
+                name=user_info.get("name"),
+                picture=user_info.get("picture"),
             )
             db_session.add(user)
             await db_session.commit()
@@ -75,13 +82,16 @@ async def auth_via_google(request: Request):
 
     access_token = create_access_token(
         data={
-            "sub": str(user.id), # sub - Subject
+            "sub": str(user.id),
             "email": user.email
-        })
+        }
+    )
 
-    print(f"Token: {access_token}")
-
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "provider": provider
+    }
 
 @app.get("/me")
 async def get_current_user(current_user: dict = Depends(get_current_user)):
@@ -158,8 +168,10 @@ async def mfa_Setup(current_user: dict = Depends(get_current_user)):
 
     return StreamingResponse(buf, media_type="image/png")
 
+class totpCode(BaseModel):
+    code: str
 @app.post("/mfa/verify")
-async def mfa_verify(code: str, current_user: dict = Depends(get_current_user)):
+async def mfa_verify(code: totpCode, current_user: dict = Depends(get_current_user)):
     async with AsyncSessionLocal() as db_session:
         result = await db_session.execute(select(User).where(User.id == current_user["id"]))
         user = result.scalar_one_or_none()
@@ -274,3 +286,72 @@ async def change_password(reset_data: PasswordResetModel):
         await db_session.refresh(user)
 
     return {"message": "Password was successfully changed"}
+
+
+class OIDCProviderRequest(BaseModel):
+    name: str
+    client_id: str
+    client_secret: str
+    metadata_url: str
+    scope: str = "openid email profile"
+@app.post("/oidc/register")
+async def register_oidc_provider(body: OIDCProviderRequest, current_user: dict = Depends(require_admin)):
+    oauth.register(
+        body.name,
+        client_id=body.client_id,
+        client_secret=body.client_secret,
+        server_metadata_url=body.metadata_url,
+        client_kwargs={"scope": body.scope}
+    )
+    return {"message": f"{body.name} registered successfully"}
+
+class MailService(BaseModel):
+    mail_username: str
+    mail_password: str
+    mail_from: str
+    mail_port: int
+    mail_server: str
+    mail_starttls: bool
+    mail_ssl_tls: bool
+@app.post("/modify-mail")
+async def modify_mail_service(body: MailService, current_user: dict = Depends(require_admin)):
+    global fm
+    conf = ConnectionConfig(
+        MAIL_USERNAME=body.mail_username,
+        MAIL_PASSWORD=body.mail_password,
+        MAIL_FROM=body.mail_from,
+        MAIL_PORT=body.mail_port,
+        MAIL_SERVER=body.mail_server,
+        MAIL_STARTTLS=body.mail_starttls,
+        MAIL_SSL_TLS=body.mail_ssl_tls,
+    )
+    fm = FastMail(conf)
+
+@app.delete("/remove-mail")
+async def remove_mail_servivce( current_user: dict = Depends(require_admin)):
+    global fm
+    fm = FastMail()
+
+@app.get("/oidc/login-url/{provider}")
+async def get_oidc_login_url(provider: str, request: Request):
+    client = oauth.create_client(provider)
+
+    if client is None:
+        raise HTTPException(status_code=404, detail=f"Provider '{provider}' not found")
+
+    redirect_uri = request.url_for("auth_via_oidc", provider=provider)
+
+    uri, state = await client.create_authorization_url(str(redirect_uri))
+
+    return {
+        "provider": provider,
+        "authorization_url": uri,
+        "state": state
+    }
+
+class oidcProvider:
+    oidc_provider: str
+@app.delete("/oidc/remove")
+async def remove_oidc_login(provider: oidcProvider, current_user: dict = Depends(require_admin)):
+    oauth.destroy_client(provider)
+    return {"message": f"OIDC login removed successfully"}

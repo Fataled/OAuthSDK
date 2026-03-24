@@ -15,6 +15,7 @@ from redis_client import redis_client
 
 load_dotenv()
 
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -86,3 +87,4 @@ def create_password_reset_code():
     code = str(secrets.randbelow(900000) + 100000)
     exp = datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_EXPIRE_MINUTES)
     return code, exp
+
