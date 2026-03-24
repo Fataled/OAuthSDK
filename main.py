@@ -349,7 +349,7 @@ async def get_oidc_login_url(provider: str, request: Request):
         "state": state
     }
 
-class oidcProvider:
+class oidcProvider(BaseModel):
     oidc_provider: str
 @app.delete("/oidc/remove")
 async def remove_oidc_login(provider: oidcProvider, current_user: dict = Depends(require_admin)):
