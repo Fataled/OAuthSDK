@@ -136,30 +136,24 @@ public class AuthClient
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> ModifyMailService(string token, string mailUsername, string mailPassword,
-        string mailFrom, int mailPort, string mailServer, bool mailStartttls, bool mailSslTls)
+    public async Task<JsonElement> ModifyMailService(string adminKey, string sender, string sendgridApiKey)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/modify-mail");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("x-admin-key", adminKey);
         request.Content = JsonContent.Create(new
         {
-            mail_username = mailUsername,
-            mail_password = mailPassword,
-            mail_from = mailFrom,
-            mail_port = mailPort,
-            mail_server = mailServer,
-            mail_startttls = mailStartttls,
-            mail_ssl_tls = mailSslTls,
+            sender,
+            sendgrid_api_key = sendgridApiKey
         });
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> DeleteMailServiceAsync(string token)
+    public async Task<JsonElement> DeleteMailServiceAsync(string adminKey)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"/remove-mail");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("x-admin-key", adminKey);
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -227,7 +221,7 @@ public class AuthClient
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> RequestPasswordReset(string email)
+    public async Task<ConfirmationResponse> RequestPasswordReset(string email)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/auth/reset-request");
         request.Content = JsonContent.Create(new
@@ -235,8 +229,15 @@ public class AuthClient
             email
         });
         var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
+        if (!response.IsSuccessStatusCode)
+        {
+            var error =  await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            return new ConfirmationResponse()
+            {
+                Detail = error.detail
+            };
+        }
+        return await response.Content.ReadFromJsonAsync<ConfirmationResponse>();
     }
 
     public async Task<JsonElement> ResetPassword(string email, string password, string code)

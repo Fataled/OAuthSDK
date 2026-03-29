@@ -262,13 +262,8 @@ await client.ResetPassword(
 ```csharp
 await client.ModifyMailService(
     "admin-key",
-    "email@gmail.com",
-    "password",
-    "email@gmail.com",
-    587,
-    "smtp.gmail.com",
-    true,
-    false
+    "sender",
+    "sendgrid-api-key"
 );
 ```
 
